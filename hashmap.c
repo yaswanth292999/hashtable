@@ -1,82 +1,87 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>  
 
-#define INITIAL_HASHMAP_SIZE 5 // Use #define for fixed size
+/*
+In function parameters, arrays automatically decay into pointers.
+This means char key[] is actually interpreted as char *key.
+The compiler sees char key[] as char *key, so using char[] inside function parameters is not allowed.
+*/
+struct KVPair{
 
-char *hashmap[INITIAL_HASHMAP_SIZE]; // Declaration of the hashmap
+ char *key;
+ char *value;
 
-int computeHash(char value[], int SIZE_OF_HASHMAP)
+};
+
+struct HashTable{
+    
+    int size;
+   struct KVPair *items;
+
+};
+
+int computeHash(char *key)
 {
-    int lengthOfValueString = strlen(value);
-    int totalAscii = 0;
 
-    for (int i = 0; i < lengthOfValueString; i++)
+    int strLen = strlen(key);
+    int sumOfAscii = 0;
+
+    for (int i = 0; i < strLen; i++)
     {
-        int charAsciiValue = (int)value[i];
-        totalAscii += charAsciiValue;
+        int asciiValue = (int)key[i];
+        sumOfAscii += asciiValue;
     }
 
-    int hash = totalAscii % SIZE_OF_HASHMAP;
-
-    return hash;
+    return sumOfAscii;
 }
 
-int setValue(char value[])
-{
-    int hash = computeHash(value, INITIAL_HASHMAP_SIZE); // Use corrected constant
 
-    if (hashmap[hash] != NULL)
-    {
-        printf("Collision Detected for String %s as there is already an existing value %s at index %d.!!Value not set!!!\n", value, hashmap[hash], hash);
-        return 0;
-    }
+int insert(struct HashTable* hashmap,char *key, char* value){
 
-    else
-    {
-        hashmap[hash] = value;
-        printf("Set Value for %s at index %d\n", hashmap[hash], hash);
-        return 1;
-    }
+    //compute hash
+    int hashValue=computeHash(key);
+    int hashIndex=(hashValue)%(hashmap->size);
+    printf("\nInserted at value %d \n",hashIndex);
+    //create <Key,Value> pairs
+    struct KVPair kvPair={key,value};
+    hashmap->items[hashIndex]=kvPair;
+
+    return 1;
 }
 
-int getValue(char value[])
-{
+int get(struct HashTable* hashTable,char *key){
 
-    int hash = computeHash(value, INITIAL_HASHMAP_SIZE);
+    //compute hash and hashIndex
+    printf("\nGetting the value...for %s\n",key);
+    int hashValue=computeHash(key);
+    int hashIndex=(hashValue)%hashTable->size;
+    if(strcmp(hashTable->items[hashIndex].key,key)==0){
+      printf("Value for %s is %s",key,hashTable->items[hashIndex].value); 
+      return 1;
+    }
 
-    if (hashmap[hash] == value)
-    {
-        printf("Got Value at index %d!!\n", hash);
-    }
-    else
-    {
-        printf("VALUE NOT FOUND!!!\n");
-    }
+    return 0;
+
 }
 
 int main()
 {
-    // Initialize the hashmap to NULL
-    char *names[] = {
-        "Alice",
-        "Bob",
-        "Charlie",
-        "David",
-        "Eve",
-        "Frank",
-        "Grace",
-        "Heidi",
-        "Ivan",
-        "Judy"};
 
-    // Set values for the sample names
-    for (int i = 0; i < 10; i++)
-    {
-        setValue(names[i]); // Store each name in the hashmap
-    }
-    for (int i = 0; i < 10; i++)
-    {
-        getValue(names[i]); // Store each name in the hashmap
-    }
-    return 0;
+    char myName[] = "yaswanth";
+    char myName2[]="Honeymoon";
+    char myValue[]="coder";
+
+   struct HashTable hashTable;
+
+   hashTable.size=10;
+
+   hashTable.items= malloc(sizeof(struct KVPair)*(hashTable.size));
+    
+    insert(&hashTable,myName,myValue);
+
+    printf("%d",get(&hashTable,myName2));
+
+
+
 }
