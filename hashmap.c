@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 /* TO DO
 
@@ -26,11 +27,12 @@ typedef struct kvPair
 {
     char *key;
     char *value;
+    int8_t isDeleted;
 } kvPair;
 
 kvPair **hashtable;
 kvPair **addKey(char *key, char *value, kvPair **hashtable);
-kvPair **resizeHashmap(kvPair **oldHashmap);
+kvPair **resizeHashmap(kvPair **oldHashmap, int shrink);
 
 int capacity = 4;
 int noOfElements = 0;
@@ -65,12 +67,9 @@ int getSlotLinearProbing(char *key, kvPair **hashmap)
 
     do
     {
-        index++;
-        if (index >= capacity)
-        {
-            index = 0;
-        }
-    } while (hashmap[index] != NULL && initalIndex != index);
+        index = (index + 1) % capacity;
+
+    } while ((hashmap[index] != NULL) && initalIndex != index);
 
     if (hashmap[index] != NULL)
     {
@@ -100,12 +99,9 @@ int getIndexByKey(char *key, kvPair **hashmap)
 
     do
     {
-        index++;
-        if (index >= capacity)
-        {
-            index = 0;
-        }
-    } while (strcmp(hashmap[index]->key, key) != 0 && hashmap[index] != NULL);
+        index = (index + 1) % capacity;
+
+    } while (hashmap[index] != NULL && strcmp(hashmap[index]->key, key) != 0);
 
     if (hashmap[index] == NULL || strcmp(hashmap[index]->key, key) != 0)
     {
@@ -115,13 +111,17 @@ int getIndexByKey(char *key, kvPair **hashmap)
     return index;
 }
 
-kvPair **resizeHashmap(kvPair **oldHashmap)
+kvPair **resizeHashmap(kvPair **oldHashmap, int shrink)
 {
     // double the capacity of the hashmap
     int oldCapacity = capacity;
-    capacity = capacity * 2;
 
-    printf("Triggering a resize with new size %d when no of elements are %d \n", capacity, noOfElements);
+    if (!shrink)
+        capacity = capacity * 2;
+    else
+        capacity = capacity / 2;
+
+        printf("Triggering a resize with new size %d when no of elements are %d \n", capacity, noOfElements);
 
     kvPair **newHashmap = malloc(capacity * sizeof(kvPair *));
 
@@ -130,6 +130,10 @@ kvPair **resizeHashmap(kvPair **oldHashmap)
         if (oldHashmap[index] == NULL)
         {
             continue;
+        }
+        else if (oldHashmap[index]->isDeleted == 1)
+        {
+            free(oldHashmap[index]);
         }
         else
         {
@@ -152,7 +156,7 @@ kvPair **addKey(char *key, char *value, kvPair **hashtable)
     // trigger a resize when loadfactor is greater than treshold
     if (loadFactorVal >= resizeTreshold)
     {
-        hashtable = resizeHashmap(hashtable);
+        hashtable = resizeHashmap(hashtable, 0);
     }
 
     int index = getSlotLinearProbing(key, hashtable);
@@ -167,6 +171,7 @@ kvPair **addKey(char *key, char *value, kvPair **hashtable)
         kvPair *pair = malloc(sizeof(kvPair));
         pair->key = key;
         pair->value = value;
+        pair->isDeleted = 0;
         hashtable[index] = pair;
         noOfElements++;
     }
@@ -174,42 +179,152 @@ kvPair **addKey(char *key, char *value, kvPair **hashtable)
     return hashtable;
 }
 
-int removeKey(char *key, kvPair **hashtable)
+kvPair **removeKey(char *key, kvPair **hashtable)
 {
-       
-        
+    int index = getIndexByKey(key, hashtable);
+    if (index == -1)
+        return hashtable;
+    kvPair *pair = hashtable[index];
+    pair->isDeleted = 1;
+    noOfElements--;
+    float loadFactorVal = loadFactor();
+    if (loadFactorVal <= 0.25)
+    {
+        printf("Triggering shrink when loadFactor is %f and capacity is %d and no of ele is %d \n", loadFactorVal,capacity,noOfElements);
+        hashtable = resizeHashmap(hashtable, 1);
+    }
+    return hashtable;
 }
 
 char *getValue(char *key, kvPair **hashtable)
 {
     int index = getIndexByKey(key, hashtable);
 
-    if (index == -1)
+    if (index == -1 || hashtable[index]->isDeleted == 1)
         return NULL;
 
     return hashtable[index]->value;
 }
-
-int main()
+void test_insert_and_resize()
 {
-
-    hashtable = malloc(capacity * sizeof(kvPair *));
+    printf("\n--- Test 1: Insert and Resize ---\n");
     char *keys[] = {"Yaswanth", "Gandhi", "Nagalakshmi", "Skyfall", "Broo", "SAF", "ADS", "ADSASD"};
     char *values[] = {"ezrawolf", "mom", "dad", "ads", "ads", "asdeaw", "adsasd", "adsdsa"};
+
     for (int i = 0; i < 8; i++)
     {
-        // printf("hashtable address is %p for adding string %s \n", hashtable, keys[i]);
+        printf("Inserting %s -> %s\n", keys[i], values[i]);
         hashtable = addKey(keys[i], values[i], hashtable);
     }
 
-    for (int index = 0; index < capacity; index++)
+    printf("\nAfter insertion and possible resize:\n");
+    for (int i = 0; i < capacity; i++)
     {
-        if (hashtable[index] != NULL)
+        if (hashtable[i] != NULL)
         {
-            printf("The element there is %s at index %i and the value is %s \n", hashtable[index]->key, index, hashtable[index]->value);
+            printf("Index %d: key=%s, value=%s\n", i, hashtable[i]->key, hashtable[i]->value);
         }
     }
+}
 
-    char *myValue = getValue("ADSASD", hashtable);
-    printf("My Value is %s \n", myValue);
+void test_get_value()
+{
+    printf("\n--- Test 2: Get Value ---\n");
+    char *myValue = getValue("Gandhi", hashtable);
+    if (myValue)
+        printf("Found value for 'Gandhi': %s\n", myValue);
+    else
+        printf("'Gandhi' not found.\n");
+
+    myValue = getValue("Skyfall", hashtable);
+    if (myValue)
+        printf("Found value for 'Skyfall': %s\n", myValue);
+    else
+        printf("'Skyfall' not found.\n");
+
+    myValue = getValue("UnknownKey", hashtable);
+    if (!myValue)
+        printf("'UnknownKey' correctly not found.\n");
+}
+
+void test_remove_and_get()
+{
+    printf("\n--- Test 3: Remove and Get ---\n");
+
+    hashtable = removeKey("Gandhi", hashtable);
+    char *myValue = getValue("Gandhi", hashtable);
+    if (myValue == NULL)
+        printf("After removal, 'Gandhi' not found ✅\n");
+    else
+        printf("Error: 'Gandhi' still exists ❌\n");
+
+    hashtable = removeKey("Skyfall", hashtable);
+    myValue = getValue("Skyfall", hashtable);
+    if (myValue == NULL)
+        printf("After removal, 'Skyfall' not found ✅\n");
+}
+
+void test_reinsertion_after_remove()
+{
+    printf("\n--- Test 4: Reinsertion After Removal ---\n");
+
+    hashtable = addKey("Gandhi", "new_mom", hashtable);
+    char *myValue = getValue("Gandhi", hashtable);
+    printf("My value gandhi is %s \n",myValue);
+    if (myValue && strcmp(myValue, "new_mom") == 0)
+        printf("Reinsertion of 'Gandhi' successful ✅\n");
+    else
+        printf("Reinsertion failed ❌\n");
+}
+
+void test_mass_removal_and_shrink()
+{
+    printf("\n--- Test 5: Mass Removal and Shrink ---\n");
+    char *keys[] = {"Yaswanth", "Nagalakshmi", "Broo", "SAF", "ADS", "ADSASD"};
+    for (int i = 0; i < 6; i++)
+    {
+        printf("Removing %s\n", keys[i]);
+        hashtable = removeKey(keys[i], hashtable);
+    }
+
+    printf("\nAfter mass removal:\n");
+    for (int i = 0; i < capacity; i++)
+    {
+        if (hashtable[i])
+            printf("Index %d -> key: %s value: %s is deleted %d \n", i, hashtable[i]->key,hashtable[i]->value,hashtable[i]->isDeleted);
+        else
+            printf("Index %d is empty\n", i);
+    }
+}
+
+int main()
+{
+    hashtable = malloc(capacity * sizeof(kvPair *));
+    // char *keys[] = {"Yaswanth", "Gandhi", "Nagalakshmi", "Skyfall", "Broo", "SAF", "ADS", "ADSASD"};
+    // char *values[] = {"ezrawolf", "mom", "dad", "ads", "ads", "asdeaw", "adsasd", "adsdsa"};
+    // for (int i = 0; i < 8; i++)
+    // {
+    //     // printf("hashtable address is %p for adding string %s \n", hashtable, keys[i]);
+    //     hashtable = addKey(keys[i], values[i], hashtable);
+    // }
+
+    // for (int index = 0; index < capacity; index++)
+    // {
+    //     if (hashtable[index] != NULL)
+    //     {
+    //         printf("The element there is %s at index %i and the value is %s \n", hashtable[index]->key, index, hashtable[index]->value);
+    //     }
+    // }
+
+    // char *myValue = getValue("Gandhi", hashtable);
+    // printf("My Value is %s \n", myValue);
+    // hashtable = removeKey("Gandhi", hashtable);
+    // myValue = getValue("Gandhi", hashtable);
+    // printf("My Value is %s \n", myValue);
+
+    test_insert_and_resize();
+    test_get_value();
+    test_remove_and_get();
+    test_reinsertion_after_remove();
+    test_mass_removal_and_shrink();
 }
